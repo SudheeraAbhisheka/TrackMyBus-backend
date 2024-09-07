@@ -7,7 +7,7 @@ public class Root {
     private int x;
     private double y;
     private final int STARTING_X = 4;
-    private final int ENDING_X = 26;
+    private final int ENDING_X = 100;
 
     public double getY(double x){
         return y = 800-300*Math.pow(x/1000-0.4, 6) +
