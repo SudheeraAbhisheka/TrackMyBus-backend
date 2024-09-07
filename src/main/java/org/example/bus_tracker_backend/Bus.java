@@ -1,11 +1,8 @@
 package org.example.bus_tracker_backend;
 
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.TaskScheduler;
-import org.springframework.scheduling.annotation.Async;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
+import org.springframework.scheduling.support.CronTrigger;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -16,32 +13,46 @@ import java.util.concurrent.ScheduledFuture;
 public class Bus {
     private final String BUS_ID = "bus_001";
     private final GpsLocation currentLocation = new GpsLocation();
-    private final Root root = new Root();
-    private int x = root.getSTARTING_X();
+    private final RootEntity rootEntity = new RootEntity();
+    private int x = rootEntity.getSTARTING_X();
+    private boolean reached = false;
 
     private ScheduledFuture<?> future;
 
     public Bus(TaskScheduler taskScheduler) {
-        future = taskScheduler.scheduleAtFixedRate(this::updateGpsLocation, Duration.ofSeconds(2));
+        taskScheduler.schedule(() -> startGpsUpdates(taskScheduler), new CronTrigger("0 * * * * *"));
+
     }
+
+    public void startGpsUpdates(TaskScheduler taskScheduler) {
+        future = taskScheduler.scheduleAtFixedRate(this::updateGpsLocation, Duration.ofSeconds(2));
+
+    }
+
 
     public void updateGpsLocation() {
         Random random = new Random();
 
         x = x + random.nextInt(20) + 10;
 
-        if (x > root.getENDING_X() && future != null) {
-            future.cancel(true);
-
-            return;
+        if (x >= rootEntity.getENDING_X() && future != null) {
+            reached = true;
+            x = rootEntity.getENDING_X();
         }
 
-        double y = root.getY(x);
+        double y = rootEntity.getY(x);
         currentLocation.setX(x);
         currentLocation.setY(y);
         currentLocation.setTimestamp(System.currentTimeMillis());
 
         System.out.println("Updated Location: " + x + ", " + y);
+
+        if(reached){
+            reached = false;
+            x = rootEntity.getSTARTING_X();
+            System.out.println("Reached ending location");
+            future.cancel(true);
+        }
     }
 
     public GpsLocation getCurrentLocation() {
