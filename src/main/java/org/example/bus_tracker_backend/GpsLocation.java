@@ -5,12 +5,18 @@ import lombok.Getter;
 import org.example.bus_tracker_backend.repo.RootRepo;
 import org.mvel2.MVEL;
 import org.springframework.scheduling.TaskScheduler;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
+import org.springframework.scheduling.support.CronTrigger;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledFuture;
 import java.util.Optional;
 
@@ -18,12 +24,14 @@ import java.util.Optional;
 public class GpsLocation {
     @Getter
     private final LocationObject currentLocation = new LocationObject();
-    private boolean reached = false;
-    private ScheduledFuture<?> future;
+//    private boolean reached = false;
     private RootEntity rootEntity;
     private int x;
+    ScheduledFuture<?>[] futures;
+    ScheduledFuture<?> future;
 
-    public GpsLocation(TaskScheduler taskScheduler, RootRepo rootRepo) {
+
+    public GpsLocation(RootRepo rootRepo) {
         Optional<RootEntity> rootEntityOptional = rootRepo.findById(1);
         rootEntityOptional.ifPresentOrElse(
                 entity -> this.rootEntity = entity,
@@ -32,25 +40,32 @@ public class GpsLocation {
 
         x = rootEntity.getStarting_x();
 
-        //        taskScheduler.schedule(() -> startGpsUpdates(taskScheduler), new CronTrigger("0 * * * * *"));
-        future = taskScheduler.scheduleAtFixedRate(this::updateGpsLocation, Duration.ofSeconds(2));
+        ThreadPoolTaskScheduler taskScheduler = new ThreadPoolTaskScheduler();
+        taskScheduler.setPoolSize(2);
+        taskScheduler.initialize();
+
+        futures = new ScheduledFuture<?>[2];
+
+        for (int i = 0; i < futures.length; i++) {
+            int threadNumber = i;
+            taskScheduler.schedule(() -> startGpsUpdates(taskScheduler, threadNumber), new CronTrigger("0 * * * * *"));
+        }
 
     }
 
-    public void startGpsUpdates(TaskScheduler taskScheduler) {
-//        future = taskScheduler.scheduleAtFixedRate(this::updateGpsLocation, Duration.ofSeconds(2));
-
+    public void startGpsUpdates(TaskScheduler taskScheduler, int threadNumber) {
+        futures[threadNumber] = taskScheduler.scheduleAtFixedRate(() -> updateGpsLocation(threadNumber), Duration.ofSeconds(2));
     }
 
-
-    public void updateGpsLocation() {
+    public void updateGpsLocation(int threadNumber) {
         Random random = new Random();
         int start = rootEntity.getStarting_x();
         int end = rootEntity.getEnding_x();
+        boolean reached = false;
 
         x = x + random.nextInt(20) + 10;
 
-        if (x >= end && future != null) {
+        if (x >= end) {
             reached = true;
             x = end;
         }
@@ -60,13 +75,12 @@ public class GpsLocation {
         currentLocation.setY(y);
         currentLocation.setTimestamp(System.currentTimeMillis());
 
-        System.out.println("Updated Location: " + x + ", " + y);
+        System.out.println( threadNumber + " " + Thread.currentThread().getId() +" " + x + ", " + y );
 
         if(reached){
-            reached = false;
             x = start;
-            System.out.println("Reached ending location");
-            future.cancel(true);
+            System.out.println(threadNumber + "Reached ending location");
+            futures[threadNumber].cancel(true);
         }
     }
 
