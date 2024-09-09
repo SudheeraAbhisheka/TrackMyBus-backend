@@ -1,11 +1,9 @@
 package org.example.bus_tracker_backend;
 
-import lombok.Getter;
 import org.example.bus_tracker_backend.repo.RootRepo;
 import org.mvel2.MVEL;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
-import org.springframework.scheduling.support.CronTrigger;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -13,24 +11,19 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 @Service
 public class GpsLocation {
-    @Getter
-    private final LocationObject currentLocation = new LocationObject();
+
     private RootEntity rootEntity;
-    private int x;
     private final Object lock = new Object(); // Lock object for thread safety
     ScheduledFuture<?>[] futures;
     private int start;
     private int end;
     Random random = new Random();
     Map<Integer, Integer> xCoordinates = new HashMap<>();
+    Map<String, LocationObject> Locations = new HashMap<>();
 
 
     public GpsLocation(RootRepo rootRepo) {
@@ -40,41 +33,40 @@ public class GpsLocation {
                 () -> System.out.println("RootEntity with ID 1 not found")
         );
 
-        x = rootEntity.getStarting_x();
         start = rootEntity.getStarting_x();
         end = rootEntity.getEnding_x();
 
         ThreadPoolTaskScheduler taskScheduler = new ThreadPoolTaskScheduler();
-        taskScheduler.setPoolSize(2);
+        taskScheduler.setPoolSize(3);
         taskScheduler.initialize();
 
         futures = new ScheduledFuture<?>[2];
 
         for (int i = 0; i < futures.length; i++) {
             int threadNumber = i;
+            String busId = i+"";
 //            taskScheduler.schedule(() -> startGpsUpdates(taskScheduler, threadNumber), new CronTrigger("0 * * * * *"));
-            futures[threadNumber] = taskScheduler.scheduleAtFixedRate(() -> updateGpsLocation(threadNumber), Duration.ofSeconds(2));
+            futures[threadNumber] = taskScheduler.scheduleAtFixedRate(() -> updateGpsLocation(threadNumber, busId), Duration.ofSeconds(1));
             xCoordinates.put(threadNumber, start);
         }
 
+        taskScheduler.scheduleAtFixedRate(()->System.out.println(Locations), Duration.ofSeconds(3));
+
     }
 
-    public void startGpsUpdates(TaskScheduler taskScheduler, int threadNumber) {
-        futures[threadNumber] = taskScheduler.scheduleAtFixedRate(() -> updateGpsLocation(threadNumber), Duration.ofSeconds(2));
+    public void startGpsUpdates(TaskScheduler taskScheduler, int threadNumber, String busId) {
+        futures[threadNumber] = taskScheduler.scheduleAtFixedRate(() -> updateGpsLocation(threadNumber, busId), Duration.ofSeconds(2));
     }
 
-    public void updateGpsLocation(int threadNumber) {
+    public void updateGpsLocation(int threadNumber, String busId) {
         boolean reached = false;
+        int x;
+        LocationObject locationObject;
 
         synchronized (lock) {
-            System.out.println(threadNumber + " " + xCoordinates.get(threadNumber));
-
             x = xCoordinates.get(threadNumber) + random.nextInt(20) + 10;
 
             xCoordinates.put(threadNumber, x);
-
-            System.out.println(threadNumber + " " + x);
-            System.out.println();
 
             if (x >= end) {
                 reached = true;
@@ -82,19 +74,17 @@ public class GpsLocation {
             }
 
             double y = getY(x);
-            currentLocation.setX(x);
-            currentLocation.setY(y);
-            currentLocation.setTimestamp(System.currentTimeMillis());
 
-//            System.out.println(threadNumber + " " + Thread.currentThread().getId() + " " + x + ", " + y);
+            System.out.println(busId + " " + x + ", " + y);
+
+            locationObject = new LocationObject(busId, x, y);
+
+            Locations.put(busId, locationObject);
+
 
             if (reached) {
-                synchronized (lock) {
-                    x = start;
-                }
+                locationObject.setReached(true);
                 System.out.println(threadNumber + " Reached ending location");
-
-
                 futures[threadNumber].cancel(true);
 
             }
