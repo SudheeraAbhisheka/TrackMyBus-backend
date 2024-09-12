@@ -1,5 +1,7 @@
 package org.example.bus_tracker_backend;
 
+import lombok.Getter;
+import org.example.bus_tracker_backend.repo.BusRepo;
 import org.example.bus_tracker_backend.repo.RootRepo;
 import org.mvel2.MVEL;
 import org.springframework.scheduling.TaskScheduler;
@@ -7,79 +9,92 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Random;
+import java.util.*;
 import java.util.concurrent.ScheduledFuture;
 
 @Service
 public class GpsLocation {
-
+    private final Object lock = new Object();
     private RootEntity rootEntity;
-    private final Object lock = new Object(); // Lock object for thread safety
     ScheduledFuture<?>[] futures;
-    private int start;
-    private int end;
     Random random = new Random();
     Map<Integer, Integer> xCoordinates = new HashMap<>();
-    Map<String, LocationObject> Locations = new HashMap<>();
+    @Getter Map<String, LocationObject> Locations = new HashMap<>();
+    @Getter Map<String, Map<String, LocationObject>> LocationsWithRoot = new HashMap<>();
+    @Getter List<RootEntity> rootEntities;
+    @Getter Map<String, Integer> busStops = new HashMap<>();
+    @Getter Map<String, Long> startedTimes = new HashMap<>();
 
+    public GpsLocation(RootRepo rootRepo, BusRepo busRepo) {
+        List<BusEntity> busEntities = busRepo.findAll();
+        ThreadPoolTaskScheduler taskScheduler;
+        Map<String, Integer> speeds = new HashMap<>();
 
-    public GpsLocation(RootRepo rootRepo) {
-        Optional<RootEntity> rootEntityOptional = rootRepo.findById(1);
-        rootEntityOptional.ifPresentOrElse(
-                entity -> this.rootEntity = entity,
-                () -> System.out.println("RootEntity with ID 1 not found")
-        );
+        if (busEntities.isEmpty()) {
+            System.out.println("No BusEntities found");
+            return;
+        }
 
-        start = rootEntity.getStarting_x();
-        end = rootEntity.getEnding_x();
-
-        ThreadPoolTaskScheduler taskScheduler = new ThreadPoolTaskScheduler();
-        taskScheduler.setPoolSize(3);
+        rootEntities = rootRepo.findAll();
+        taskScheduler = new ThreadPoolTaskScheduler();
+        taskScheduler.setPoolSize(2);
         taskScheduler.initialize();
 
         futures = new ScheduledFuture<?>[2];
 
-        for (int i = 0; i < futures.length; i++) {
+        for (int i = 0; i < busEntities.size(); i++) {
+            BusEntity busEntity = busEntities.get(i);
+            speeds.put(busEntity.getBus_id(), random.nextInt(3) + 1);
+
+            Optional<RootEntity> rootEntityOptional = rootRepo.findById(busEntity.getRoot_id());
+            rootEntityOptional.ifPresentOrElse(
+                    entity -> this.rootEntity = entity,
+                    ()-> System.out.println("RootEntity with ID 1 not found")
+            );
+
+            busStops.put(rootEntity.getRoot_id(), rootEntity.getBus_stop());
+            startedTimes.put(rootEntity.getRoot_id(), System.currentTimeMillis());
+
             int threadNumber = i;
-            String busId = i+"";
+
 //            taskScheduler.schedule(() -> startGpsUpdates(taskScheduler, threadNumber), new CronTrigger("0 * * * * *"));
-            futures[threadNumber] = taskScheduler.scheduleAtFixedRate(() -> updateGpsLocation(threadNumber, busId), Duration.ofSeconds(1));
-            xCoordinates.put(threadNumber, start);
+            futures[threadNumber] = taskScheduler.scheduleAtFixedRate(() -> updateGpsLocation(threadNumber, busEntity.getBus_id(),
+                    busEntity.getRoot_id(), speeds.get(busEntity.getBus_id()), rootEntity.getEnding_x(), rootEntity.getRoot_function()), Duration.ofSeconds(3));
+            xCoordinates.put(threadNumber, rootEntity.getStarting_x());
+
         }
 
-        taskScheduler.scheduleAtFixedRate(()->System.out.println(Locations), Duration.ofSeconds(3));
+//        taskScheduler.scheduleAtFixedRate(()->System.out.println(Locations), Duration.ofSeconds(3));
 
     }
 
-    public void startGpsUpdates(TaskScheduler taskScheduler, int threadNumber, String busId) {
-        futures[threadNumber] = taskScheduler.scheduleAtFixedRate(() -> updateGpsLocation(threadNumber, busId), Duration.ofSeconds(2));
-    }
+//    public void startGpsUpdates(TaskScheduler taskScheduler, int threadNumber, String busId) {
+//        futures[threadNumber] = taskScheduler.scheduleAtFixedRate(() -> updateGpsLocation(threadNumber, busId), Duration.ofSeconds(2));
+//    }
 
-    public void updateGpsLocation(int threadNumber, String busId) {
+    public void updateGpsLocation(int threadNumber, String busId, String rootId, int speed, int endX, String rootFunction) {
         boolean reached = false;
         int x;
         LocationObject locationObject;
 
         synchronized (lock) {
-            x = xCoordinates.get(threadNumber) + random.nextInt(20) + 10;
+            x = xCoordinates.get(threadNumber) + random.nextInt(20*speed) + 10*speed;
 
             xCoordinates.put(threadNumber, x);
 
-            if (x >= end) {
+            if (x >= endX) {
                 reached = true;
-                x = end;
+                x = endX;
             }
 
-            double y = getY(x);
-
-            System.out.println(busId + " " + x + ", " + y);
+            double y = getY(x, rootFunction);
 
             locationObject = new LocationObject(busId, x, y);
 
             Locations.put(busId, locationObject);
+            LocationsWithRoot.put(rootId, Locations);
+
+            System.out.println(Locations);
 
 
             if (reached) {
@@ -91,11 +106,12 @@ public class GpsLocation {
         }
     }
 
-    public double getY(double x) {
+    private double getY(double x, String rootFunction) {
         Map<String, Object> variables = new HashMap<>();
         variables.put("x", x);
         variables.put("Math", Math.class);
 
-        return (Double) MVEL.eval(rootEntity.getRoot_function(), variables);
+        return (Double) MVEL.eval(rootFunction, variables);
     }
+
 }

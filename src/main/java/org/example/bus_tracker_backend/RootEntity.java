@@ -10,8 +10,9 @@ import lombok.Data;
 public class RootEntity {
     @Id
     @GeneratedValue
-    private int root_id;
+    private String root_id;
     private int starting_x;
     private int ending_x;
     private String root_function;
+    private int bus_stop;
 }
