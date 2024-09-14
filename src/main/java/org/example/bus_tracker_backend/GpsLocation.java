@@ -1,10 +1,13 @@
 package org.example.bus_tracker_backend;
 
 import lombok.Getter;
+import org.example.bus_tracker_backend.entities.BusEntity;
+import org.example.bus_tracker_backend.entities.BusStopEntity;
+import org.example.bus_tracker_backend.entities.RootEntity;
 import org.example.bus_tracker_backend.repo.BusRepo;
+import org.example.bus_tracker_backend.repo.BusStopRepo;
 import org.example.bus_tracker_backend.repo.RootRepo;
 import org.mvel2.MVEL;
-import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.stereotype.Service;
 
@@ -19,13 +22,15 @@ public class GpsLocation {
     ScheduledFuture<?>[] futures;
     Random random = new Random();
     Map<Integer, Integer> xCoordinates = new HashMap<>();
+    private final int THREAD_SCHEDULE_INTERVAL = 3;
     @Getter Map<String, LocationObject> Locations = new HashMap<>();
     @Getter Map<String, Map<String, LocationObject>> LocationsWithRoot = new HashMap<>();
     @Getter List<RootEntity> rootEntities;
-    @Getter Map<String, Integer> busStops = new HashMap<>();
+    @Getter Map<String, List<BusStopEntity>> busStops_ = new HashMap<>();
+    @Getter Map<String, Double> estArrival = new HashMap<>();
     @Getter Map<String, Long> startedTimes = new HashMap<>();
 
-    public GpsLocation(RootRepo rootRepo, BusRepo busRepo) {
+    public GpsLocation(RootRepo rootRepo, BusRepo busRepo, BusStopRepo busStopRepo) {
         List<BusEntity> busEntities = busRepo.findAll();
         ThreadPoolTaskScheduler taskScheduler;
         Map<String, Integer> speeds = new HashMap<>();
@@ -49,17 +54,17 @@ public class GpsLocation {
             Optional<RootEntity> rootEntityOptional = rootRepo.findById(busEntity.getRoot_id());
             rootEntityOptional.ifPresentOrElse(
                     entity -> this.rootEntity = entity,
-                    ()-> System.out.println("RootEntity with ID 1 not found")
+                    ()-> System.out.println("RootEntity with ID _ not found")
             );
 
-            busStops.put(rootEntity.getRoot_id(), rootEntity.getBus_stop());
+            busStops_.put(rootEntity.getRoot_id(), busStopRepo.findByIdRootId(busEntity.getRoot_id()));
             startedTimes.put(rootEntity.getRoot_id(), System.currentTimeMillis());
 
             int threadNumber = i;
 
 //            taskScheduler.schedule(() -> startGpsUpdates(taskScheduler, threadNumber), new CronTrigger("0 * * * * *"));
             futures[threadNumber] = taskScheduler.scheduleAtFixedRate(() -> updateGpsLocation(threadNumber, busEntity.getBus_id(),
-                    busEntity.getRoot_id(), speeds.get(busEntity.getBus_id()), rootEntity.getEnding_x(), rootEntity.getRoot_function()), Duration.ofSeconds(3));
+                    busEntity.getRoot_id(), speeds.get(busEntity.getBus_id()), rootEntity.getEnding_x(), rootEntity.getRoot_function()), Duration.ofSeconds(THREAD_SCHEDULE_INTERVAL));
             xCoordinates.put(threadNumber, rootEntity.getStarting_x());
 
         }
@@ -80,6 +85,16 @@ public class GpsLocation {
         synchronized (lock) {
             x = xCoordinates.get(threadNumber) + random.nextInt(20*speed) + 10*speed;
 
+            if(!busStops_.get(rootId).isEmpty()){
+                if(busStops_.get(rootId).get(0).getId().getXCoordinate() > xCoordinates.get(threadNumber)){
+                    double est = estimatedTimeToNextStop(busStops_.get(rootId).get(0).getId().getXCoordinate(), xCoordinates.get(threadNumber), x, rootFunction);
+                    estArrival.put(busId, est);
+                }
+                else{
+                    estArrival.put(busId, 0.0);
+                }
+            }
+
             xCoordinates.put(threadNumber, x);
 
             if (x >= endX) {
@@ -93,8 +108,6 @@ public class GpsLocation {
 
             Locations.put(busId, locationObject);
             LocationsWithRoot.put(rootId, Locations);
-
-            System.out.println(Locations);
 
 
             if (reached) {
@@ -114,4 +127,23 @@ public class GpsLocation {
         return (Double) MVEL.eval(rootFunction, variables);
     }
 
+    private double estimatedTimeToNextStop(int nextStopX, int currentX, int nextX, String rootFunction) {
+        double currentSpeed;
+        double unitDistance;
+        double distanceToNextStop;
+
+        unitDistance = Math.sqrt(
+                Math.pow(nextX - currentX, 2) +
+                Math.pow(getY(nextX, rootFunction) - getY(currentX, rootFunction), 2));
+
+        currentSpeed = unitDistance/THREAD_SCHEDULE_INTERVAL;
+
+        distanceToNextStop = Math.sqrt(
+                Math.pow(nextStopX - currentX, 2) +
+                Math.pow(getY(nextStopX, rootFunction) - getY(currentX, rootFunction), 2));
+
+        return Math.round(distanceToNextStop/currentSpeed * 100.0) / 100.0;
+    }
+
 }
+

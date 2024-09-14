@@ -1,4 +1,4 @@
-package org.example.bus_tracker_backend;
+package org.example.bus_tracker_backend.entities;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;

@@ -1,8 +1,9 @@
 package org.example.bus_tracker_backend.controller;
 
+import org.example.bus_tracker_backend.entities.BusStopEntity;
 import org.example.bus_tracker_backend.LocationObject;
 import org.example.bus_tracker_backend.GpsLocation;
-import org.example.bus_tracker_backend.RootEntity;
+import org.example.bus_tracker_backend.entities.RootEntity;
 import org.example.bus_tracker_backend.repo.RootRepo;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -49,13 +50,23 @@ public class GpsController {
         }
     }
 
-    @GetMapping("/bus-stops/{root_id}")
-    public int getListOfBusStops(@PathVariable String root_id) {
-        return gpsLocation.getBusStops().get(root_id);
-    }
+//    @GetMapping("/bus-stops/{root_id}")
+//    public int getListOfBusStops(@PathVariable String root_id) {
+//        return gpsLocation.getBusStops().get(root_id);
+//    }
 
     @GetMapping("/started-time/{root_id}")
     public long getStartedTime(@PathVariable String root_id) {
         return gpsLocation.getStartedTimes().get(root_id);
+    }
+
+    @GetMapping("/bus-stops/{root_id}")
+    public BusStopEntity getListOfBusStops(@PathVariable String root_id) {
+        return gpsLocation.getBusStops_().get(root_id).get(0);
+    }
+
+    @GetMapping("/est-arrival/{root_id}")
+    public double getEstArrival(@PathVariable String root_id) {
+        return gpsLocation.getEstArrival().get(root_id);
     }
 }
