@@ -7,10 +7,7 @@ import org.example.bus_tracker_backend.entities.RootEntity;
 import org.example.bus_tracker_backend.repo.RootRepo;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.CrossOrigin;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
@@ -50,11 +47,6 @@ public class GpsController {
         }
     }
 
-//    @GetMapping("/bus-stops/{root_id}")
-//    public int getListOfBusStops(@PathVariable String root_id) {
-//        return gpsLocation.getBusStops().get(root_id);
-//    }
-
     @GetMapping("/started-time/{root_id}")
     public long getStartedTime(@PathVariable String root_id) {
         return gpsLocation.getStartedTimes().get(root_id);
@@ -62,11 +54,17 @@ public class GpsController {
 
     @GetMapping("/bus-stops/{root_id}")
     public BusStopEntity getListOfBusStops(@PathVariable String root_id) {
-        return gpsLocation.getBusStops_().get(root_id).get(0);
+        return gpsLocation.getBusStops().get(root_id).get(0);
     }
 
     @GetMapping("/est-arrival/{root_id}")
     public double getEstArrival(@PathVariable String root_id) {
         return gpsLocation.getEstArrival().get(root_id);
+    }
+
+    @PostMapping("/restart")
+    public ResponseEntity<String> restartGps() {
+        gpsLocation.restartGpsTracking();
+        return ResponseEntity.ok("GPS tracking restarted.");
     }
 }

@@ -23,17 +23,18 @@ public class GpsLocation {
     Random random = new Random();
     Map<Integer, Integer> xCoordinates = new HashMap<>();
     private final int THREAD_SCHEDULE_INTERVAL = 3;
+    List<BusEntity> busEntities;
+    ThreadPoolTaskScheduler taskScheduler;
+    Map<String, Integer> speeds = new HashMap<>();
     @Getter Map<String, LocationObject> Locations = new HashMap<>();
     @Getter Map<String, Map<String, LocationObject>> LocationsWithRoot = new HashMap<>();
     @Getter List<RootEntity> rootEntities;
-    @Getter Map<String, List<BusStopEntity>> busStops_ = new HashMap<>();
+    @Getter Map<String, List<BusStopEntity>> busStops = new HashMap<>();
     @Getter Map<String, Double> estArrival = new HashMap<>();
     @Getter Map<String, Long> startedTimes = new HashMap<>();
 
     public GpsLocation(RootRepo rootRepo, BusRepo busRepo, BusStopRepo busStopRepo) {
-        List<BusEntity> busEntities = busRepo.findAll();
-        ThreadPoolTaskScheduler taskScheduler;
-        Map<String, Integer> speeds = new HashMap<>();
+        busEntities = busRepo.findAll();
 
         if (busEntities.isEmpty()) {
             System.out.println("No BusEntities found");
@@ -57,7 +58,7 @@ public class GpsLocation {
                     ()-> System.out.println("RootEntity with ID _ not found")
             );
 
-            busStops_.put(rootEntity.getRoot_id(), busStopRepo.findByIdRootId(busEntity.getRoot_id()));
+            busStops.put(rootEntity.getRoot_id(), busStopRepo.findByIdRootId(busEntity.getRoot_id()));
             startedTimes.put(rootEntity.getRoot_id(), System.currentTimeMillis());
 
             int threadNumber = i;
@@ -85,9 +86,9 @@ public class GpsLocation {
         synchronized (lock) {
             x = xCoordinates.get(threadNumber) + random.nextInt(20*speed) + 10*speed;
 
-            if(!busStops_.get(rootId).isEmpty()){
-                if(busStops_.get(rootId).get(0).getId().getXCoordinate() > xCoordinates.get(threadNumber)){
-                    double est = estimatedTimeToNextStop(busStops_.get(rootId).get(0).getId().getXCoordinate(), xCoordinates.get(threadNumber), x, rootFunction);
+            if(!busStops.get(rootId).isEmpty()){
+                if(busStops.get(rootId).get(0).getId().getXCoordinate() > xCoordinates.get(threadNumber)){
+                    double est = estimatedTimeToNextStop(busStops.get(rootId).get(0).getId().getXCoordinate(), xCoordinates.get(threadNumber), x, rootFunction);
                     estArrival.put(busId, est);
                 }
                 else{
@@ -143,6 +144,33 @@ public class GpsLocation {
                 Math.pow(getY(nextStopX, rootFunction) - getY(currentX, rootFunction), 2));
 
         return Math.round(distanceToNextStop/currentSpeed * 100.0) / 100.0;
+    }
+
+    public void stopGpsTracking() {
+        synchronized (lock) {
+            for (ScheduledFuture<?> future : futures) {
+                if (future != null && !future.isCancelled()) {
+                    future.cancel(true);
+                }
+            }
+            System.out.println("GPS tracking stopped.");
+        }
+    }
+
+    // Add a method to restart the GPS tracking
+    public void restartGpsTracking() {
+        stopGpsTracking();
+        System.out.println("GPS tracking restarting...");
+        // Reinitialize the tasks
+        for (int i = 0; i < futures.length; i++) {
+            BusEntity busEntity = busEntities.get(i);
+            int threadNumber = i;
+            int speed = speeds.get(busEntity.getBus_id());
+            futures[threadNumber] = taskScheduler.scheduleAtFixedRate(() -> updateGpsLocation(threadNumber, busEntity.getBus_id(),
+                    busEntity.getRoot_id(), speed, rootEntity.getEnding_x(), rootEntity.getRoot_function()), Duration.ofSeconds(THREAD_SCHEDULE_INTERVAL));
+            xCoordinates.put(threadNumber, rootEntity.getStarting_x());
+        }
+        System.out.println("GPS tracking restarted.");
     }
 
 }
