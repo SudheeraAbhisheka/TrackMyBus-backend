@@ -14,5 +14,4 @@ public class RootEntity {
     private int starting_x;
     private int ending_x;
     private String root_function;
-    private int bus_stop;
 }

@@ -53,13 +53,13 @@ public class GpsController {
     }
 
     @GetMapping("/bus-stops/{root_id}")
-    public BusStopEntity getListOfBusStops(@PathVariable String root_id) {
-        return gpsLocation.getBusStops().get(root_id).get(0);
+    public List<BusStopEntity> getListOfBusStops(@PathVariable String root_id) {
+        return gpsLocation.getBusStops().get(root_id);
     }
 
-    @GetMapping("/est-arrival/{root_id}")
-    public double getEstArrival(@PathVariable String root_id) {
-        return gpsLocation.getEstArrival().get(root_id);
+    @GetMapping("/est-arrival/{xcoordinate}")
+    public Map<String, Double> getEstArrival(@PathVariable String xcoordinate) {
+        return gpsLocation.getEstimatedTimes(xcoordinate);
     }
 
     @PostMapping("/restart")
