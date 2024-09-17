@@ -1,5 +1,6 @@
 package org.example.bus_tracker_backend.controller;
 
+import org.example.bus_tracker_backend.DelayedObject;
 import org.example.bus_tracker_backend.entities.BusStopEntity;
 import org.example.bus_tracker_backend.LocationObject;
 import org.example.bus_tracker_backend.GpsLocation;
@@ -8,10 +9,12 @@ import org.example.bus_tracker_backend.repo.RootRepo;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 
 @RestController
 @CrossOrigin(origins = "http://localhost:5173")
@@ -22,9 +25,20 @@ public class GpsController {
     @Autowired
     private RootRepo rootRepo;
 
-    @GetMapping("/gps-location")
-    public Map<String, LocationObject> getGpsLocation() {
-        return gpsLocation.getLocations();
+    private SseEmitter emitter = new SseEmitter(Long.MAX_VALUE);
+
+    @GetMapping("/notify-delay")
+    public SseEmitter streamGpsLocation() {
+        return emitter;
+    }
+
+
+    public void notifyDelayedSession(DelayedObject delayedObject) {
+        try {
+            emitter.send(delayedObject);
+        } catch (Exception e) {
+            emitter.completeWithError(e);
+        }
     }
 
     @GetMapping("/gps-location/{root_id}")
@@ -47,11 +61,6 @@ public class GpsController {
         }
     }
 
-    @GetMapping("/started-time/{root_id}")
-    public long getStartedTime(@PathVariable String root_id) {
-        return gpsLocation.getStartedTimes().get(root_id);
-    }
-
     @GetMapping("/bus-stops/{root_id}")
     public List<BusStopEntity> getListOfBusStops(@PathVariable String root_id) {
         return gpsLocation.getBusStops().get(root_id);
@@ -67,4 +76,5 @@ public class GpsController {
         gpsLocation.restartGpsTracking();
         return ResponseEntity.ok("GPS tracking restarted.");
     }
+
 }

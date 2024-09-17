@@ -9,5 +9,5 @@ import lombok.Data;
 public class BusStopEntity {
     @EmbeddedId
     private BusStopId id;
-    private int secondsFromStart;
+    private int expectedTime;
 }
