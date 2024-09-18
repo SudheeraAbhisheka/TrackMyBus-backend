@@ -6,11 +6,11 @@ import lombok.Data;
 public class DelayedObject {
     private String stopCoordinate;
     private String session;
-    private double delay;
+    private double expectedInNext;
 
-    public DelayedObject(String stopCoordinate, String session, double delay) {
+    public DelayedObject(String stopCoordinate, String session, double expectedInNext) {
         this.stopCoordinate = stopCoordinate;
         this.session = session;
-        this.delay = delay;
+        this.expectedInNext = expectedInNext;
     }
 }

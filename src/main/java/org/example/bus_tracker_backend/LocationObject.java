@@ -11,6 +11,7 @@ public class LocationObject {
     private boolean reached = false;
 
     public LocationObject(String sessionId, String busId, int x, double y) {
+        this.sessionId = sessionId;
         this.busId = busId;
         this.x = x;
         this.y = y;

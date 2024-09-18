@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class GpsLocation {
@@ -35,6 +36,8 @@ public class GpsLocation {
     @Getter Map<String, List<BusStopEntity>> busStops = new HashMap<>();
     @Getter Map<String, Long> startedTimes = new HashMap<>();
     @Getter Map<KeyObject, Double> estimatedTimes = new HashMap<>();
+
+    int delay;
 
     private GpsController gpsController;
 
@@ -103,11 +106,23 @@ public class GpsLocation {
                         double est = estimatedTimeToNextStop(busStopEntity.getId().getXCoordinate(), xCoordinates.get(threadNumber), x, rootFunction);
                         estimatedTimes.put(new KeyObject(sessionId, stopCoordinate), est);
 
-                        if(busStopEntity.getExpectedTime() < est ){ // !markedDelayed.contains(new KeyObject(sessionId, stopCoordinate))
+                        int delay = busStopEntity.getExpectedTime() - (int)TimeUnit.MILLISECONDS.toSeconds(
+                                System.currentTimeMillis() - startedTimes.get(sessionId)
+                        );
+
+
+                        this.delay = delay;
+
+                        if(delay <= 0 && !markedDelayed.contains(new KeyObject(sessionId, stopCoordinate))){
                             gpsController.notifyDelayedSession(
-                                    new DelayedObject(sessionId, stopCoordinate, est - busStopEntity.getExpectedTime())
+                                    new DelayedObject(sessionId, stopCoordinate, est)
                             );
+
+                            markedDelayed.add(new KeyObject(sessionId, stopCoordinate));
+
+                            System.out.println(new DelayedObject(sessionId, stopCoordinate, est));
                         }
+
                     }
                     else{
                         estimatedTimes.put(new KeyObject(sessionId, stopCoordinate), 0.0);
@@ -132,7 +147,7 @@ public class GpsLocation {
 
             if (reached) {
                 locationObject.setReached(true);
-                System.out.println(threadNumber + " Reached ending location");
+                System.out.printf("Session %s reached ending location", sessionId);
                 futures[threadNumber].cancel(true);
 
             }
@@ -193,10 +208,15 @@ public class GpsLocation {
     public void restartGpsTracking() {
         stopGpsTracking();
         System.out.println("GPS tracking restarting...");
-        // Reinitialize the tasks
+
+        System.out.printf("Delay %s\n", delay);
+
+        markedDelayed = new ArrayList<>();
+
         for (int i = 0; i < futures.length; i++) {
             BusEntity busEntity = busEntities.get(i);
             int threadNumber = i;
+            startedTimes.put(busEntity.getSession_id(), System.currentTimeMillis());
             futures[threadNumber] = taskScheduler.scheduleAtFixedRate(() -> updateGpsLocation(threadNumber, busEntity.getSession_id(), busEntity.getBus_id(),
                     busEntity.getRoot_id(), speeds.get(busEntity.getSession_id()),
                     rootEntity.getEnding_x(), rootEntity.getRoot_function()), Duration.ofSeconds(THREAD_SCHEDULE_INTERVAL));
