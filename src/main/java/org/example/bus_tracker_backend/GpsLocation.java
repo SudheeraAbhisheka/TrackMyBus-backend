@@ -22,6 +22,7 @@ import java.util.concurrent.TimeUnit;
 public class GpsLocation {
     private final Object lock = new Object();
     private RootEntity rootEntity;
+    private final RootRepo rootRepo;;
     ScheduledFuture<?>[] futures;
     Random random = new Random();
     Map<Integer, Integer> xCoordinates = new HashMap<>();
@@ -39,10 +40,11 @@ public class GpsLocation {
 
     int delay;
 
-    private GpsController gpsController;
+    private final GpsController gpsController;
 
     @Autowired
     public GpsLocation(RootRepo rootRepo, BusRepo busRepo, BusStopRepo busStopRepo, GpsController gpsController) {
+        this.rootRepo = rootRepo;
         this.gpsController = gpsController;
         busEntities = busRepo.findAll();
 
@@ -65,7 +67,7 @@ public class GpsLocation {
             Optional<RootEntity> rootEntityOptional = rootRepo.findById(busEntity.getRoot_id());
             rootEntityOptional.ifPresentOrElse(
                     entity -> this.rootEntity = entity,
-                    ()-> System.out.println("RootEntity with ID _ not found")
+                    ()-> System.out.print("RootEntity with ID _ not found\n")
             );
 
             busStops.put(rootEntity.getRoot_id(), busStopRepo.findByIdRootId(busEntity.getRoot_id()));
@@ -202,6 +204,23 @@ public class GpsLocation {
                 }
             }
             System.out.println("GPS tracking stopped.");
+        }
+    }
+
+    public RootEntity addRootEntity(RootEntity rootEntity) {
+        RootEntity entity = rootRepo.save(rootEntity);
+        rootEntities = rootRepo.findAll();
+
+        return entity;
+    }
+
+    public boolean deleteRootEntityById(String id) {
+        if (rootRepo.existsById(id)) {
+            rootRepo.deleteById(id);
+            rootEntities = rootRepo.findAll();
+            return true;
+        } else {
+            return false;
         }
     }
 

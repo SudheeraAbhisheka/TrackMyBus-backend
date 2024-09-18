@@ -71,10 +71,39 @@ public class GpsController {
         return gpsLocation.getEstimatedTimes(xcoordinate);
     }
 
+    @GetMapping("/add-route/{root_id}")
+    public RootEntity getRootEntity(@PathVariable String root_id) {
+        List<RootEntity> rootEntities = gpsLocation.getRootEntities();
+        RootEntity rootEntity = null;
+
+        for (RootEntity entity : rootEntities) {
+            if(entity.getRoot_id().equals(root_id)){
+                rootEntity = entity;
+            }
+        }
+
+        return rootEntity;
+    }
+
+    @PostMapping("/add-route")
+    public RootEntity addRootEntity(@RequestBody RootEntity rootEntity) {
+        return gpsLocation.addRootEntity(rootEntity);
+    }
+
     @PostMapping("/restart")
     public ResponseEntity<String> restartGps() {
         gpsLocation.restartGpsTracking();
         return ResponseEntity.ok("GPS tracking restarted.");
+    }
+
+    @DeleteMapping("add-route/{id}")
+    public ResponseEntity<Void> deleteRootEntity(@PathVariable String id) {
+        boolean isDeleted = gpsLocation.deleteRootEntityById(id);
+        if (isDeleted) {
+            return ResponseEntity.ok().build();
+        } else {
+            return ResponseEntity.notFound().build();
+        }
     }
 
 }

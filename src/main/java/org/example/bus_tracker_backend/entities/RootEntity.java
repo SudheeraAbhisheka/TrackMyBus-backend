@@ -9,7 +9,6 @@ import lombok.Data;
 @Entity
 public class RootEntity {
     @Id
-    @GeneratedValue
     private String root_id;
     private int starting_x;
     private int ending_x;
