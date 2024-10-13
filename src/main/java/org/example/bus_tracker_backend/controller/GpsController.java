@@ -7,6 +7,7 @@ import org.example.bus_tracker_backend.GpsLocation;
 import org.example.bus_tracker_backend.entities.RootEntity;
 import org.example.bus_tracker_backend.repo.RootRepo;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.DependsOn;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;

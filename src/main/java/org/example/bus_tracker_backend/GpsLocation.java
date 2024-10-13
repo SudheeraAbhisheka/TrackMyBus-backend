@@ -10,6 +10,7 @@ import org.example.bus_tracker_backend.repo.BusStopRepo;
 import org.example.bus_tracker_backend.repo.RootRepo;
 import org.mvel2.MVEL;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.DependsOn;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.stereotype.Service;
 
@@ -20,9 +21,13 @@ import java.util.concurrent.TimeUnit;
 
 @Service
 public class GpsLocation {
+    private final RootRepo rootRepo;
+    private final BusRepo busRepo;
+    private final BusStopRepo busStopRepo;
+    private final GpsController gpsController;
+
     private final Object lock = new Object();
     private RootEntity rootEntity;
-    private final RootRepo rootRepo;;
     ScheduledFuture<?>[] futures;
     Random random = new Random();
     Map<Integer, Integer> xCoordinates = new HashMap<>();
@@ -31,7 +36,7 @@ public class GpsLocation {
     ThreadPoolTaskScheduler taskScheduler;
     Map<String, Double> speeds = new HashMap<>();
     Map<String, LocationObject> Locations = new HashMap<>();
-    List<KeyObject> markedDelayed = new ArrayList<>();
+    List<KeyObject> markedDelayed;
     @Getter Map<String, Map<String, LocationObject>> LocationsWithRoot = new HashMap<>();
     @Getter List<RootEntity> rootEntities;
     @Getter Map<String, List<BusStopEntity>> busStops = new HashMap<>();
@@ -40,20 +45,26 @@ public class GpsLocation {
 
     int delay;
 
-    private final GpsController gpsController;
-
     @Autowired
     public GpsLocation(RootRepo rootRepo, BusRepo busRepo, BusStopRepo busStopRepo, GpsController gpsController) {
         this.rootRepo = rootRepo;
+        this.busRepo = busRepo;
+        this.busStopRepo = busStopRepo;
         this.gpsController = gpsController;
-        busEntities = busRepo.findAll();
 
+        busEntities = busRepo.findAll();
         if (busEntities.isEmpty()) {
             System.out.println("No BusEntities found");
             return;
         }
 
         rootEntities = rootRepo.findAll();
+        if (rootEntities.isEmpty()) {
+            System.out.println("No RootEntities found");
+            return;
+        }
+
+        markedDelayed = new ArrayList<>();
         taskScheduler = new ThreadPoolTaskScheduler();
         taskScheduler.setPoolSize(busEntities.size());
         taskScheduler.initialize();
@@ -225,24 +236,82 @@ public class GpsLocation {
     }
 
     public void restartGpsTracking() {
-        stopGpsTracking();
-        System.out.println("GPS tracking restarting...");
+        synchronized (lock) {
+            stopGpsTracking();
+            System.out.println("GPS tracking restarting...");
 
-        System.out.printf("Delay %s\n", delay);
+            // Re-fetch busEntities and rootEntities from the database
+            busEntities = busRepo.findAll();
+            rootEntities = rootRepo.findAll();
 
-        markedDelayed = new ArrayList<>();
+            if (busEntities.isEmpty()) {
+                System.out.println("No BusEntities found");
+                return;
+            }
 
-        for (int i = 0; i < futures.length; i++) {
-            BusEntity busEntity = busEntities.get(i);
-            int threadNumber = i;
-            startedTimes.put(busEntity.getSession_id(), System.currentTimeMillis());
-            futures[threadNumber] = taskScheduler.scheduleAtFixedRate(() -> updateGpsLocation(threadNumber, busEntity.getSession_id(), busEntity.getBus_id(),
-                    busEntity.getRoot_id(), speeds.get(busEntity.getSession_id()),
-                    rootEntity.getEnding_x(), rootEntity.getRoot_function()), Duration.ofSeconds(THREAD_SCHEDULE_INTERVAL));
-            xCoordinates.put(threadNumber, rootEntity.getStarting_x());
+            if (rootEntities.isEmpty()) {
+                System.out.println("No RootEntities found");
+                return;
+            }
+
+            System.out.printf("Delay %s\n", delay);
+
+            // Re-initialize data structures
+            markedDelayed.clear();
+            speeds.clear();
+            xCoordinates.clear();
+            busStops.clear();
+            startedTimes.clear();
+            estimatedTimes.clear();
+            Locations.clear();
+            LocationsWithRoot.clear();
+
+            // Shut down and recreate taskScheduler
+            taskScheduler.shutdown();
+            taskScheduler = new ThreadPoolTaskScheduler();
+            taskScheduler.setPoolSize(busEntities.size());
+            taskScheduler.initialize();
+
+            futures = new ScheduledFuture<?>[busEntities.size()];
+
+            for (int i = 0; i < busEntities.size(); i++) {
+                BusEntity busEntity = busEntities.get(i);
+
+                speeds.put(busEntity.getSession_id(), random.nextDouble(2) + 1);
+
+                Optional<RootEntity> rootEntityOptional = rootRepo.findById(busEntity.getRoot_id());
+                RootEntity rootEntityForBus;
+                if (rootEntityOptional.isPresent()) {
+                    rootEntityForBus = rootEntityOptional.get();
+                } else {
+                    System.out.printf("RootEntity with ID %s not found\n", busEntity.getRoot_id());
+                    continue; // Skip this busEntity
+                }
+
+                busStops.put(rootEntityForBus.getRoot_id(), busStopRepo.findByIdRootId(busEntity.getRoot_id()));
+                startedTimes.put(busEntity.getSession_id(), System.currentTimeMillis());
+
+                int threadNumber = i;
+                RootEntity finalRootEntityForBus = rootEntityForBus; // Make it effectively final for lambda
+
+                futures[threadNumber] = taskScheduler.scheduleAtFixedRate(
+                        () -> updateGpsLocation(
+                                threadNumber,
+                                busEntity.getSession_id(),
+                                busEntity.getBus_id(),
+                                busEntity.getRoot_id(),
+                                speeds.get(busEntity.getSession_id()),
+                                finalRootEntityForBus.getEnding_x(),
+                                finalRootEntityForBus.getRoot_function()
+                        ),
+                        Duration.ofSeconds(THREAD_SCHEDULE_INTERVAL)
+                );
+                xCoordinates.put(threadNumber, finalRootEntityForBus.getStarting_x());
+            }
+            System.out.println("GPS tracking restarted.");
         }
-        System.out.println("GPS tracking restarted.");
     }
+
 
 }
 
