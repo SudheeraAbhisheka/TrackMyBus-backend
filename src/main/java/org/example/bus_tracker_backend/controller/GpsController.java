@@ -1,13 +1,13 @@
 package org.example.bus_tracker_backend.controller;
 
 import org.example.bus_tracker_backend.DelayedObject;
+import org.example.bus_tracker_backend.service.RootEntityService;
 import org.example.bus_tracker_backend.entities.BusStopEntity;
 import org.example.bus_tracker_backend.LocationObject;
 import org.example.bus_tracker_backend.GpsLocation;
 import org.example.bus_tracker_backend.entities.RootEntity;
 import org.example.bus_tracker_backend.repo.RootRepo;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.DependsOn;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -15,7 +15,6 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
 
 @RestController
 @CrossOrigin(origins = "http://localhost:5173")
@@ -25,6 +24,8 @@ public class GpsController {
     private GpsLocation gpsLocation;
     @Autowired
     private RootRepo rootRepo;
+    @Autowired
+    private RootEntityService rootEntityService;
 
     private SseEmitter emitter = new SseEmitter(Long.MAX_VALUE);
 
@@ -95,6 +96,12 @@ public class GpsController {
     public ResponseEntity<String> restartGps() {
         gpsLocation.restartGpsTracking();
         return ResponseEntity.ok("GPS tracking restarted.");
+    }
+
+    @PostMapping("/update-default-test-data")
+    public ResponseEntity<String> updateDefaultTestData() {
+        rootEntityService.executeRawInsert();
+        return ResponseEntity.ok("Default test data updated.");
     }
 
     @DeleteMapping("add-route/{id}")

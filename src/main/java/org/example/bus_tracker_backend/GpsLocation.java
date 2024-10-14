@@ -10,7 +10,6 @@ import org.example.bus_tracker_backend.repo.BusStopRepo;
 import org.example.bus_tracker_backend.repo.RootRepo;
 import org.mvel2.MVEL;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.DependsOn;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.stereotype.Service;
 
@@ -24,19 +23,18 @@ public class GpsLocation {
     private final RootRepo rootRepo;
     private final BusRepo busRepo;
     private final BusStopRepo busStopRepo;
-    private final GpsController gpsController;
-
     private final Object lock = new Object();
+    private final GpsController gpsController;
     private RootEntity rootEntity;
     ScheduledFuture<?>[] futures;
     Random random = new Random();
     Map<Integer, Integer> xCoordinates = new HashMap<>();
     private final int THREAD_SCHEDULE_INTERVAL = 3;
     List<BusEntity> busEntities;
-    ThreadPoolTaskScheduler taskScheduler;
+    ThreadPoolTaskScheduler taskScheduler = new ThreadPoolTaskScheduler();
     Map<String, Double> speeds = new HashMap<>();
     Map<String, LocationObject> Locations = new HashMap<>();
-    List<KeyObject> markedDelayed;
+    List<KeyObject> markedDelayed = new ArrayList<>();
     @Getter Map<String, Map<String, LocationObject>> LocationsWithRoot = new HashMap<>();
     @Getter List<RootEntity> rootEntities;
     @Getter Map<String, List<BusStopEntity>> busStops = new HashMap<>();
@@ -64,8 +62,6 @@ public class GpsLocation {
             return;
         }
 
-        markedDelayed = new ArrayList<>();
-        taskScheduler = new ThreadPoolTaskScheduler();
         taskScheduler.setPoolSize(busEntities.size());
         taskScheduler.initialize();
 
@@ -94,7 +90,6 @@ public class GpsLocation {
 
         }
 //        taskScheduler.scheduleAtFixedRate(()->System.out.println(Locations), Duration.ofSeconds(3));
-
     }
 
 //    public void startGpsUpdates(TaskScheduler taskScheduler, int threadNumber, String busId) {
@@ -209,11 +204,14 @@ public class GpsLocation {
 
     public void stopGpsTracking() {
         synchronized (lock) {
-            for (ScheduledFuture<?> future : futures) {
-                if (future != null && !future.isCancelled()) {
-                    future.cancel(true);
+            if(futures!=null){
+                for (ScheduledFuture<?> future : futures) {
+                    if (future != null && !future.isCancelled()) {
+                        future.cancel(true);
+                    }
                 }
             }
+
             System.out.println("GPS tracking stopped.");
         }
     }
