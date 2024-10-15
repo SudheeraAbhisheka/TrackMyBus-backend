@@ -27,7 +27,7 @@ public class GpsController {
     @Autowired
     private RootEntityService rootEntityService;
 
-    private SseEmitter emitter = new SseEmitter(Long.MAX_VALUE);
+    private final SseEmitter emitter = new SseEmitter(Long.MAX_VALUE);
 
     @GetMapping("/notify-delay")
     public SseEmitter streamGpsLocation() {
