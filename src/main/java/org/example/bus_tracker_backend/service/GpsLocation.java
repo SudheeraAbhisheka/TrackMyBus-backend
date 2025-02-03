@@ -1,6 +1,9 @@
-package org.example.bus_tracker_backend;
+package org.example.bus_tracker_backend.service;
 
 import lombok.Getter;
+import org.example.bus_tracker_backend.DelayedObject;
+import org.example.bus_tracker_backend.KeyObject;
+import org.example.bus_tracker_backend.LocationObject;
 import org.example.bus_tracker_backend.controller.GpsController;
 import org.example.bus_tracker_backend.entities.BusEntity;
 import org.example.bus_tracker_backend.entities.BusStopEntity;

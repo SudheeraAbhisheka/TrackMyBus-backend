@@ -4,7 +4,7 @@ import org.example.bus_tracker_backend.DelayedObject;
 import org.example.bus_tracker_backend.service.RootEntityService;
 import org.example.bus_tracker_backend.entities.BusStopEntity;
 import org.example.bus_tracker_backend.LocationObject;
-import org.example.bus_tracker_backend.GpsLocation;
+import org.example.bus_tracker_backend.service.GpsLocation;
 import org.example.bus_tracker_backend.entities.RootEntity;
 import org.example.bus_tracker_backend.repo.RootRepo;
 import org.springframework.beans.factory.annotation.Autowired;
